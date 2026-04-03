@@ -7,21 +7,32 @@
 class MultiFlexAnalyzerSettings : public AnalyzerSettings
 {
 public:
-	MultiFlexAnalyzerSettings();
-	virtual ~MultiFlexAnalyzerSettings();
+  MultiFlexAnalyzerSettings();
+  virtual ~MultiFlexAnalyzerSettings();
 
-	virtual bool SetSettingsFromInterfaces();
-	void UpdateInterfacesFromSettings();
-	virtual void LoadSettings( const char* settings );
-	virtual const char* SaveSettings();
+  virtual bool SetSettingsFromInterfaces();
+  void UpdateInterfacesFromSettings();
+  virtual void LoadSettings(const char* settings);
+  virtual const char* SaveSettings();
 
-	
-	Channel mInputChannel;
-	U32 mBitRate;
+  Channel mClkChannel;
+  Channel mSyncChannel;
+  Channel mTx2Channel;
+  Channel mTx1Channel;
+  Channel mTx0Channel;
+  Channel mRx2Channel;
+  Channel mRx1Channel;
+  Channel mRx0Channel;
 
 protected:
-	AnalyzerSettingInterfaceChannel	mInputChannelInterface;
-	AnalyzerSettingInterfaceInteger	mBitRateInterface;
+  AnalyzerSettingInterfaceChannel mClkInterface;
+  AnalyzerSettingInterfaceChannel mSyncInterface;
+  AnalyzerSettingInterfaceChannel mTx2Interface;
+  AnalyzerSettingInterfaceChannel mTx1Interface;
+  AnalyzerSettingInterfaceChannel mTx0Interface;
+  AnalyzerSettingInterfaceChannel mRx2Interface;
+  AnalyzerSettingInterfaceChannel mRx1Interface;
+  AnalyzerSettingInterfaceChannel mRx0Interface;
 };
 
-#endif //MULTIFLEX_ANALYZER_SETTINGS
+#endif // MULTIFLEX_ANALYZER_SETTINGS
