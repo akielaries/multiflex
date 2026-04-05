@@ -1,0 +1,35 @@
+SIM            ?= icarus
+TOPLEVEL        = multiflex_tx
+TOPLEVEL_LANG   = verilog
+VERILOG_SOURCES = $(PWD)/../multiflex_tx.v
+COMPILE_ARGS    = -P multiflex_tx.NUM_LANES=3
+
+COCOTB_MAKEFILES = $(shell cocotb-config --makefiles)/Makefile.sim
+
+TESTS = test_1lane test_2lane test_3lane test_timing
+
+.PHONY: all $(TESTS) clean
+
+all: $(TESTS)
+
+# cocotb's Makefile.icarus uses += to append to VERILOG_SOURCES and COMPILE_ARGS
+# when WAVES=1 (adding the dump module and -s cocotb_iverilog_dump).  Those +=
+# assignments are defeated if the variables are command-line overrides, and
+# cause double-appending if they come from the environment.  Avoid both problems
+# by pre-generating the dump module and passing WAVES=0 so the += blocks never
+# run; everything is explicit in the command-line values below.
+$(TESTS):
+	python3 $(PWD)/gen_dump.py sim_build/$@ $(TOPLEVEL)
+	$(MAKE) -f $(COCOTB_MAKEFILES) \
+		SIM=$(SIM) \
+		TOPLEVEL=$(TOPLEVEL) \
+		TOPLEVEL_LANG=$(TOPLEVEL_LANG) \
+		VERILOG_SOURCES="$(VERILOG_SOURCES) sim_build/$@/cocotb_iverilog_dump.v" \
+		COMPILE_ARGS="$(COMPILE_ARGS) -s cocotb_iverilog_dump" \
+		FST="-fst" \
+		WAVES=0 \
+		SIM_BUILD=sim_build/$@ \
+		COCOTB_TEST_MODULES=$@
+
+clean:
+	rm -rf sim_build __pycache__ results.xml

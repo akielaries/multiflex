@@ -1,0 +1,53 @@
+memory-map:
+  bus: apb-32
+  name: multiflex_regs
+  description: MultiFlex Protocol Control Registers
+  children:
+    - reg:
+        name: ctrl
+        description: control register
+        width: 32
+        access: rw
+        children:
+          - field:
+              name: enable
+              description: enable transmitter and wire clock
+              range: 0
+          - field:
+              name: lanes
+              description: number of active lanes (1-31, must not exceed NUM_LANES parameter of RTL instance)
+              range: 5-1
+          - field:
+              name: clk_div
+              description: wire clock half-period in fabric cycles minus 1 (default 4 = 10 MHz at 100 MHz)
+              range: 13-6
+
+    - reg:
+        name: status
+        description: status register
+        width: 32
+        access: ro
+        children:
+          - field:
+              name: tx_busy
+              description: transmitter is active
+              range: 0
+          - field:
+              name: tx_full
+              description: TX FIFO full -- do not write tx_data when set
+              range: 1
+          - field:
+              name: tx_empty
+              description: TX FIFO empty
+              range: 2
+
+    - reg:
+        name: tx_data
+        description: TX FIFO push -- write a byte to transmit (ignored if tx_full)
+        width: 32
+        access: rw
+        children:
+          - field:
+              name: data
+              description: byte to push into TX FIFO
+              range: 7-0
