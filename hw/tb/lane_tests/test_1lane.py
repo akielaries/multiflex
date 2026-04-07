@@ -20,4 +20,4 @@ async def test_1lane_single_byte(dut):
     bits = symbols_to_bits(symbols, 1)
     got  = bits_to_byte(bits)
     assert got == 0xA5, f"expected 0xA5 got 0x{got:02X}, bits={bits}"
-    dut._log.info("OK")
+    dut._log.info(f"symbols={len(symbols)} bits={bits} got=0x{got:02X} expected=0xA5 PASS")

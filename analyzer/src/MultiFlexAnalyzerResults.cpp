@@ -29,7 +29,7 @@ void MultiFlexAnalyzerResults::GenerateBubbleText(U64 frame_index, Channel& chan
   const char* prefix = is_tx ? "TX:" : "RX:";
 
   char val_str[64];
-  AnalyzerHelpers::GetNumberString(word, display_base, 3, val_str, sizeof(val_str));
+  AnalyzerHelpers::GetNumberString(word, display_base, 8, val_str, sizeof(val_str));
 
   char full_str[128];
   std::snprintf(full_str, sizeof(full_str), "%s%s", prefix, val_str);
@@ -61,11 +61,11 @@ void MultiFlexAnalyzerResults::GenerateExportFile(const char* file, DisplayBase 
     AnalyzerHelpers::GetTimeString(frame.mStartingSampleInclusive, trigger_sample, sample_rate, time_str, sizeof(time_str));
 
     char tx_str[64];
-    AnalyzerHelpers::GetNumberString(frame.mData1, display_base, 3, tx_str, sizeof(tx_str));
+    AnalyzerHelpers::GetNumberString(frame.mData1, display_base, 8, tx_str, sizeof(tx_str));
 
     if (has_rx) {
       char rx_str[64];
-      AnalyzerHelpers::GetNumberString(frame.mData2, display_base, 3, rx_str, sizeof(rx_str));
+      AnalyzerHelpers::GetNumberString(frame.mData2, display_base, 8, rx_str, sizeof(rx_str));
       file_stream << time_str << "," << tx_str << "," << rx_str << std::endl;
     } else {
       file_stream << time_str << "," << tx_str << std::endl;
@@ -88,8 +88,8 @@ void MultiFlexAnalyzerResults::GenerateFrameTabularText(U64 frame_index, Display
 
   char tx_str[64];
   char rx_str[64];
-  AnalyzerHelpers::GetNumberString(frame.mData1, display_base, 3, tx_str, sizeof(tx_str));
-  AnalyzerHelpers::GetNumberString(frame.mData2, display_base, 3, rx_str, sizeof(rx_str));
+  AnalyzerHelpers::GetNumberString(frame.mData1, display_base, 8, tx_str, sizeof(tx_str));
+  AnalyzerHelpers::GetNumberString(frame.mData2, display_base, 8, rx_str, sizeof(rx_str));
 
   char buf[256];
   std::snprintf(buf, sizeof(buf), "TX:%s RX:%s", tx_str, rx_str);

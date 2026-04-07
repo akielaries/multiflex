@@ -80,7 +80,7 @@ async def test_1lane_single_byte(dut):
     bits = symbols_to_bits(symbols, 1)
     got  = bits_to_byte(bits)
     assert got == 0xA5, f"1-lane: expected 0xA5 got 0x{got:02X}, bits={bits}"
-    dut._log.info("1-lane 0xA5 OK")
+    dut._log.info(f"1-lane: symbols={len(symbols)} bits={bits} got=0x{got:02X} expected=0xA5 PASS")
 
 
 # -------------------------------------------------------------------------
@@ -105,7 +105,7 @@ async def test_3lane_single_byte(dut):
     bits = symbols_to_bits(symbols, 3, count=8)
     got  = bits_to_byte(bits)
     assert got == 0xA5, f"3-lane: expected 0xA5 got 0x{got:02X}"
-    dut._log.info("3-lane 0xA5 OK")
+    dut._log.info(f"3-lane: symbols={len(symbols)} bits={bits} got=0x{got:02X} expected=0xA5 PASS")
 
 
 # -------------------------------------------------------------------------
@@ -129,7 +129,7 @@ async def test_2lane_single_byte(dut):
     bits = symbols_to_bits(symbols, 2, count=8)
     got  = bits_to_byte(bits)
     assert got == 0xA5, f"2-lane: expected 0xA5 got 0x{got:02X}"
-    dut._log.info("2-lane 0xA5 OK")
+    dut._log.info(f"2-lane: symbols={len(symbols)} bits={bits} got=0x{got:02X} expected=0xA5 PASS")
 
 
 # -------------------------------------------------------------------------
@@ -164,8 +164,9 @@ async def test_3lane_backtoback(dut):
         got  = bits_to_byte(bits)
         assert got == expected, \
             f"byte {i}: expected 0x{expected:02X} got 0x{got:02X}"
+        dut._log.info(f"byte {i}: got=0x{got:02X} expected=0x{expected:02X} PASS")
 
-    dut._log.info("3-lane back-to-back OK")
+    dut._log.info(f"3-lane back-to-back: symbols={len(symbols)} {len(test_bytes)} bytes PASS")
 
 
 # -------------------------------------------------------------------------
@@ -186,6 +187,7 @@ async def test_wire_clock_timing(dut):
     # sample mfx_tx just before each rising edge (one fabric cycle before)
     # since data updates on the fabric posedge that drives mfx_clk low,
     # it is stable for the entire low half before the rising edge
+    valid_samples = []
     for _ in range(8):
         await RisingEdge(dut.mfx_clk)
         if dut.mfx_sync.value:
@@ -193,5 +195,6 @@ async def test_wire_clock_timing(dut):
             tx_val = int(dut.mfx_tx.value)
             # just check that the value is 0 or 1 on lane 0
             assert tx_val in (0, 1), f"unexpected tx value {tx_val}"
+            valid_samples.append(tx_val)
 
-    dut._log.info("timing check OK")
+    dut._log.info(f"timing check: sampled {len(valid_samples)} valid symbols: {valid_samples} PASS")

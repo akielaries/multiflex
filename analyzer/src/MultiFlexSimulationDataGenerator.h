@@ -15,7 +15,7 @@ public:
   U32 GenerateSimulationData(U64 newest_sample_requested, U32 sample_rate, SimulationChannelDescriptor** simulation_channels);
 
 protected:
-  void CreateTransaction(const U8* tx_words, const U8* rx_words, U32 num_words);
+  void CreateTransaction(const U8* bytes, U32 num_bytes);
   void AdvanceAll(U32 samples);
 
   MultiFlexAnalyzerSettings* mSettings;

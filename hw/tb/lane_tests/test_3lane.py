@@ -20,7 +20,7 @@ async def test_3lane_single_byte(dut):
     bits = symbols_to_bits(symbols, 3, count=8)
     got  = bits_to_byte(bits)
     assert got == 0xA5, f"expected 0xA5 got 0x{got:02X}"
-    dut._log.info("single byte OK")
+    dut._log.info(f"symbols={len(symbols)} bits={bits} got=0x{got:02X} expected=0xA5 PASS")
 
 
 @cocotb.test()
@@ -40,7 +40,9 @@ async def test_3lane_backtoback(dut):
     symbols = await collect_symbols(dut, 9, timeout_cycles=1000)
     assert len(symbols) == 9, f"expected 9 symbols got {len(symbols)}"
 
-    for i, (expected, got) in enumerate(zip(test_bytes, decode_bytes(symbols, 3, 3))):
+    decoded = list(decode_bytes(symbols, 3, 3))
+    for i, (expected, got) in enumerate(zip(test_bytes, decoded)):
         assert got == expected, f"byte {i}: expected 0x{expected:02X} got 0x{got:02X}"
+        dut._log.info(f"byte {i}: got=0x{got:02X} expected=0x{expected:02X} PASS")
 
-    dut._log.info("back-to-back OK")
+    dut._log.info(f"symbols={len(symbols)} back-to-back {len(test_bytes)} bytes PASS")

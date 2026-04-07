@@ -46,52 +46,68 @@ U32 MultiFlexSimulationDataGenerator::GenerateSimulationData(U64 largest_sample_
 {
   U64 adjusted = AnalyzerHelpers::AdjustSimulationTargetSample(largest_sample_requested, sample_rate, mSimulationSampleRateHz);
 
-  // example transaction matching the timing diagram:
-  //   TX words: 5(101), 5(101), 2(010), 6(110)
-  //   RX words: 3(011), 4(100), 2(010), 5(101)
-  const U8 tx_words[] = { 0x5, 0x5, 0x2, 0x6 };
-  const U8 rx_words[] = { 0x3, 0x4, 0x2, 0x5 };
+  static const U8 tx_bytes[] = { 0xDE, 0xAD, 0xBE, 0xEF };
 
   while (mClkSim->GetCurrentSampleNumber() < adjusted) {
-    // idle gap between transactions
     AdvanceAll(mSamplesPerHalfClock * 20);
-    CreateTransaction(tx_words, rx_words, 4);
+    CreateTransaction(tx_bytes, 4);
   }
 
   *simulation_channels = mSimChannels.GetArray();
   return mSimChannels.GetCount();
 }
 
-void MultiFlexSimulationDataGenerator::CreateTransaction(const U8* tx_words, const U8* rx_words, U32 num_words)
+void MultiFlexSimulationDataGenerator::CreateTransaction(const U8* bytes, U32 num_bytes)
 {
-  if (mSyncSim != nullptr) { mSyncSim->TransitionIfNeeded(BIT_HIGH); }
+  int num_lanes = 1;
+  if (mTx1Sim != nullptr) num_lanes++;
+  if (mTx2Sim != nullptr) num_lanes++;
 
-  for (U32 i = 0; i < num_words; i++) {
-    if (mTx2Sim != nullptr) { mTx2Sim->TransitionIfNeeded((tx_words[i] & 4) ? BIT_HIGH : BIT_LOW); }
-    if (mTx1Sim != nullptr) { mTx1Sim->TransitionIfNeeded((tx_words[i] & 2) ? BIT_HIGH : BIT_LOW); }
-    mTx0Sim->TransitionIfNeeded((tx_words[i] & 1) ? BIT_HIGH : BIT_LOW);
-    if (mRx2Sim != nullptr) { mRx2Sim->TransitionIfNeeded((rx_words[i] & 4) ? BIT_HIGH : BIT_LOW); }
-    if (mRx1Sim != nullptr) { mRx1Sim->TransitionIfNeeded((rx_words[i] & 2) ? BIT_HIGH : BIT_LOW); }
-    if (mRx0Sim != nullptr) { mRx0Sim->TransitionIfNeeded((rx_words[i] & 1) ? BIT_HIGH : BIT_LOW); }
-
-    AdvanceAll(mSamplesPerHalfClock);
-
-    mClkSim->TransitionIfNeeded(BIT_HIGH); // rising edge -- sample point
-
-    AdvanceAll(mSamplesPerHalfClock);
-
-    mClkSim->TransitionIfNeeded(BIT_LOW); // falling edge
-  }
-
+  // LOAD: one rising edge with SYNC=0 so the decoder resets its accumulator
   if (mSyncSim != nullptr) { mSyncSim->TransitionIfNeeded(BIT_LOW); }
   if (mTx2Sim  != nullptr) { mTx2Sim->TransitionIfNeeded(BIT_LOW); }
   if (mTx1Sim  != nullptr) { mTx1Sim->TransitionIfNeeded(BIT_LOW); }
   mTx0Sim->TransitionIfNeeded(BIT_LOW);
-  if (mRx2Sim  != nullptr) { mRx2Sim->TransitionIfNeeded(BIT_LOW); }
-  if (mRx1Sim  != nullptr) { mRx1Sim->TransitionIfNeeded(BIT_LOW); }
-  if (mRx0Sim  != nullptr) { mRx0Sim->TransitionIfNeeded(BIT_LOW); }
 
   AdvanceAll(mSamplesPerHalfClock);
+  mClkSim->TransitionIfNeeded(BIT_HIGH); // LOAD rising -- SYNC=0, decoder resets
+  AdvanceAll(mSamplesPerHalfClock);
+  mClkSim->TransitionIfNeeded(BIT_LOW);  // falling before first data symbol
+
+  // data: drive each symbol MSB-first across active lanes, SYNC=1
+  for (U32 i = 0; i < num_bytes; i++) {
+    int bits_sent = 0;
+    while (bits_sent < 8) {
+      int bits_remaining = 8 - bits_sent;
+      int bits_this_sym = (bits_remaining < num_lanes) ? bits_remaining : num_lanes;
+
+      if (mSyncSim != nullptr) { mSyncSim->TransitionIfNeeded(BIT_HIGH); }
+      for (int lane = 0; lane < num_lanes; lane++) {
+        // lane (num_lanes-1) carries MSB of symbol; lower lanes carry less significant bits
+        int offset = num_lanes - 1 - lane;
+        BitState b = BIT_LOW;
+        if (offset < bits_this_sym) {
+          b = ((bytes[i] >> (7 - bits_sent - offset)) & 1) ? BIT_HIGH : BIT_LOW;
+        }
+        if      (lane == 0)                    { mTx0Sim->TransitionIfNeeded(b); }
+        else if (lane == 1 && mTx1Sim != nullptr) { mTx1Sim->TransitionIfNeeded(b); }
+        else if (lane == 2 && mTx2Sim != nullptr) { mTx2Sim->TransitionIfNeeded(b); }
+      }
+
+      AdvanceAll(mSamplesPerHalfClock);
+      mClkSim->TransitionIfNeeded(BIT_HIGH); // data rising -- decoder samples here
+      AdvanceAll(mSamplesPerHalfClock);
+      mClkSim->TransitionIfNeeded(BIT_LOW);  // falling (used as frame end for last bit)
+
+      bits_sent += bits_this_sym;
+    }
+  }
+
+  // end of burst: deassert SYNC and TX
+  if (mSyncSim != nullptr) { mSyncSim->TransitionIfNeeded(BIT_LOW); }
+  if (mTx2Sim  != nullptr) { mTx2Sim->TransitionIfNeeded(BIT_LOW); }
+  if (mTx1Sim  != nullptr) { mTx1Sim->TransitionIfNeeded(BIT_LOW); }
+  mTx0Sim->TransitionIfNeeded(BIT_LOW);
 }
 
 void MultiFlexSimulationDataGenerator::AdvanceAll(U32 samples)

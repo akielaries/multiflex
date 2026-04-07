@@ -61,68 +61,81 @@ void MultiFlexAnalyzer::WorkerThread()
   mRx1  = (mSettings.mRx1Channel  != UNDEFINED_CHANNEL) ? GetAnalyzerChannelData(mSettings.mRx1Channel)  : nullptr;
   mRx2  = (mSettings.mRx2Channel  != UNDEFINED_CHANNEL) ? GetAnalyzerChannelData(mSettings.mRx2Channel)  : nullptr;
 
+  // active TX lane count determines bits per symbol
+  int num_lanes = 1;
+  if (mTx1 != nullptr) num_lanes++;
+  if (mTx2 != nullptr) num_lanes++;
+
   for (;;) {
-    // advance CLK to the next rising edge
-    if (mClk->GetBitState() == BIT_HIGH) {
-      mClk->AdvanceToNextEdge(); // falling
-    }
-    mClk->AdvanceToNextEdge(); // rising
+    U8 byte_val = 0;
+    int bits_collected = 0;
+    U64 byte_start = 0;
+    U64 byte_end = 0;
 
-    U64 rising_sample = mClk->GetSampleNumber();
+    // accumulate symbols until we have 8 bits (one byte)
+    while (bits_collected < 8) {
+      // advance CLK to next rising edge
+      if (mClk->GetBitState() == BIT_HIGH)
+        mClk->AdvanceToNextEdge(); // to falling
+      mClk->AdvanceToNextEdge(); // to rising
 
-    // if SYNC is configured, skip clock edges where it is not asserted
-    if (mSync != nullptr) {
-      mSync->AdvanceToAbsPosition(rising_sample);
-      if (mSync->GetBitState() == BIT_LOW) {
-        continue;
+      U64 rising = mClk->GetSampleNumber();
+
+      // if sync is deasserted this is an inter-byte gap; reset accumulator
+      if (mSync != nullptr) {
+        mSync->AdvanceToAbsPosition(rising);
+        if (mSync->GetBitState() == BIT_LOW) {
+          // mark the reset point so it is visible on the CLK channel
+          mResults->AddMarker(rising, AnalyzerResults::X, mSettings.mClkChannel);
+          byte_val = 0;
+          bits_collected = 0;
+          byte_start = 0;
+          mClk->AdvanceToNextEdge(); // to falling, keep state consistent
+          continue;
+        }
       }
+
+      if (bits_collected == 0)
+        byte_start = rising;
+
+      // sample TX lanes; higher-indexed lane carries the more significant bit
+      mTx0->AdvanceToAbsPosition(rising);
+      if (mTx1 != nullptr) mTx1->AdvanceToAbsPosition(rising);
+      if (mTx2 != nullptr) mTx2->AdvanceToAbsPosition(rising);
+
+      U8 sym = (mTx0->GetBitState() == BIT_HIGH ? 1 : 0)
+             | (mTx1 != nullptr && mTx1->GetBitState() == BIT_HIGH ? 2 : 0)
+             | (mTx2 != nullptr && mTx2->GetBitState() == BIT_HIGH ? 4 : 0);
+
+      mResults->AddMarker(rising, AnalyzerResults::Dot, mSettings.mTx0Channel);
+      if (mTx1 != nullptr) mResults->AddMarker(rising, AnalyzerResults::Dot, mSettings.mTx1Channel);
+      if (mTx2 != nullptr) mResults->AddMarker(rising, AnalyzerResults::Dot, mSettings.mTx2Channel);
+
+      // upper `bits_this_sym` lanes carry data MSB-first (lower lanes are padding
+      // in the last partial symbol when 8 % num_lanes != 0)
+      int bits_remaining = 8 - bits_collected;
+      int bits_this_sym = (bits_remaining < num_lanes) ? bits_remaining : num_lanes;
+      for (int i = 0; i < bits_this_sym; i++) {
+        int lane = num_lanes - 1 - i; // descending: highest lane = MSB
+        byte_val = (byte_val << 1) | ((sym >> lane) & 1);
+      }
+      bits_collected += bits_this_sym;
+
+      // advance to falling edge to bound the last symbol's frame end
+      mClk->AdvanceToNextEdge();
+      byte_end = mClk->GetSampleNumber();
     }
-
-    // sample TX -- missing pins contribute 0
-    mTx0->AdvanceToAbsPosition(rising_sample);
-    if (mTx1 != nullptr) { mTx1->AdvanceToAbsPosition(rising_sample); }
-    if (mTx2 != nullptr) { mTx2->AdvanceToAbsPosition(rising_sample); }
-
-    U8 tx = ((mTx2 != nullptr && mTx2->GetBitState() == BIT_HIGH) ? 4 : 0) |
-            ((mTx1 != nullptr && mTx1->GetBitState() == BIT_HIGH) ? 2 : 0) |
-            ((mTx0->GetBitState() == BIT_HIGH) ? 1 : 0);
-
-    // sample RX -- only if at least one RX pin is configured
-    U8 rx = 0;
-    bool has_rx = (mRx0 != nullptr || mRx1 != nullptr || mRx2 != nullptr);
-    if (has_rx) {
-      if (mRx0 != nullptr) { mRx0->AdvanceToAbsPosition(rising_sample); }
-      if (mRx1 != nullptr) { mRx1->AdvanceToAbsPosition(rising_sample); }
-      if (mRx2 != nullptr) { mRx2->AdvanceToAbsPosition(rising_sample); }
-
-      rx = ((mRx2 != nullptr && mRx2->GetBitState() == BIT_HIGH) ? 4 : 0) |
-           ((mRx1 != nullptr && mRx1->GetBitState() == BIT_HIGH) ? 2 : 0) |
-           ((mRx0 != nullptr && mRx0->GetBitState() == BIT_HIGH) ? 1 : 0);
-    }
-
-    // mark sample point on each active data line
-    mResults->AddMarker(rising_sample, AnalyzerResults::Dot, mSettings.mTx0Channel);
-    if (mTx1 != nullptr) { mResults->AddMarker(rising_sample, AnalyzerResults::Dot, mSettings.mTx1Channel); }
-    if (mTx2 != nullptr) { mResults->AddMarker(rising_sample, AnalyzerResults::Dot, mSettings.mTx2Channel); }
-    if (mRx0 != nullptr) { mResults->AddMarker(rising_sample, AnalyzerResults::Dot, mSettings.mRx0Channel); }
-    if (mRx1 != nullptr) { mResults->AddMarker(rising_sample, AnalyzerResults::Dot, mSettings.mRx1Channel); }
-    if (mRx2 != nullptr) { mResults->AddMarker(rising_sample, AnalyzerResults::Dot, mSettings.mRx2Channel); }
-
-    // span frame to CLK falling edge so bubbles are visible
-    mClk->AdvanceToNextEdge(); // falling
-    U64 falling_sample = mClk->GetSampleNumber();
 
     Frame frame;
-    frame.mData1 = tx;
-    frame.mData2 = rx;
+    frame.mData1 = byte_val;
+    frame.mData2 = 0;
     frame.mType  = 0;
-    frame.mFlags = has_rx ? 1 : 0;
-    frame.mStartingSampleInclusive = rising_sample;
-    frame.mEndingSampleInclusive   = falling_sample;
-
+    frame.mFlags = 0;
+    frame.mStartingSampleInclusive = byte_start;
+    frame.mEndingSampleInclusive   = byte_end;
     mResults->AddFrame(frame);
     mResults->CommitResults();
-    ReportProgress(frame.mEndingSampleInclusive);
+    ReportProgress(byte_end);
   }
 }
 

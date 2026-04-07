@@ -15,10 +15,12 @@ async def test_wire_clock_timing(dut):
 
     await push_byte(dut, 0xFF)
 
+    valid_samples = []
     for _ in range(8):
         await RisingEdge(dut.mfx_clk)
         if dut.mfx_sync.value:
             tx_val = int(dut.mfx_tx.value)
             assert tx_val in (0, 1), f"unexpected tx value {tx_val}"
+            valid_samples.append(tx_val)
 
-    dut._log.info("OK")
+    dut._log.info(f"sampled {len(valid_samples)} valid symbols: {valid_samples} PASS")

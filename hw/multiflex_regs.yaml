@@ -15,16 +15,20 @@ memory-map:
               range: 0
           - field:
               name: lanes
-              description: number of active lanes (1-31, must not exceed NUM_LANES parameter of RTL instance)
+              description: number of active lanes (1-31, must not exceed NUM_LANES parameter)
               range: 5-1
           - field:
               name: clk_div
-              description: wire clock half-period in fabric cycles minus 1 (default 4 = 10 MHz at 100 MHz)
+              description: wire clock half-period in fabric cycles minus 1 (4 = 10 MHz at 100 MHz fabric)
               range: 13-6
+          - field:
+              name: loopback
+              description: internal loopback -- ties TX output back to RX input for self-test
+              range: 14
 
     - reg:
         name: status
-        description: status register
+        description: link status -- TX live bits update every cycle; TX/RX error bits are sticky, cleared via error_clr
         width: 32
         access: ro
         children:
@@ -34,12 +38,36 @@ memory-map:
               range: 0
           - field:
               name: tx_full
-              description: TX FIFO full -- do not write tx_data when set
+              description: TX FIFO full
               range: 1
           - field:
               name: tx_empty
               description: TX FIFO empty
               range: 2
+          - field:
+              name: tx_overflow
+              description: sticky -- byte was dropped because TX FIFO was full on write
+              range: 3
+          - field:
+              name: rx_locked
+              description: reserved -- RX has seen N consecutive valid frames
+              range: 8
+          - field:
+              name: rx_clk_timeout
+              description: reserved -- no mfx_clk edges seen within watchdog window
+              range: 9
+          - field:
+              name: rx_sync_lost
+              description: reserved -- mfx_sync dropped unexpectedly mid-burst
+              range: 10
+          - field:
+              name: rx_framing_err
+              description: reserved -- symbol count did not align to byte boundary
+              range: 11
+          - field:
+              name: rx_overflow
+              description: reserved -- RX FIFO full, byte dropped
+              range: 12
 
     - reg:
         name: tx_data
@@ -51,3 +79,48 @@ memory-map:
               name: data
               description: byte to push into TX FIFO
               range: 7-0
+
+    - reg:
+        name: rx_data
+        description: reserved -- RX FIFO pop (read returns oldest received byte; valid=0 if FIFO empty)
+        width: 32
+        access: ro
+        children:
+          - field:
+              name: data
+              description: reserved -- received byte
+              range: 7-0
+          - field:
+              name: valid
+              description: reserved -- 1 if data field contains a valid byte
+              range: 8
+
+    - reg:
+        name: error_cnt
+        description: saturating error counters -- cleared via error_clr
+        width: 32
+        access: ro
+        children:
+          - field:
+              name: tx_drop_count
+              description: number of TX bytes dropped due to FIFO full (saturates at 255)
+              range: 7-0
+          - field:
+              name: rx_error_count
+              description: reserved -- number of RX framing or sync errors (saturates at 255)
+              range: 15-8
+
+    - reg:
+        name: error_clr
+        description: write 1 to a bit to clear the corresponding sticky status bit and/or counter
+        width: 32
+        access: rw
+        children:
+          - field:
+              name: clr_tx
+              description: clears tx_overflow status bit and tx_drop_count counter
+              range: 0
+          - field:
+              name: clr_rx
+              description: reserved -- clears all RX error bits and rx_error_count counter
+              range: 1

@@ -1,0 +1,6 @@
+<testsuites name="results">
+  <testsuite name="all" package="all">
+    <property name="random_seed" value="1775412289" />
+    <testcase name="test_wire_clock_timing" classname="test_timing" file="/home/akiel/trunk/pub/multiflex/hw/tb/test_timing.py" lineno="6" time="0.0038852691650390625" sim_time_ns="660.0" ratio_time="169872.40058910163" />
+  </testsuite>
+</testsuites>
