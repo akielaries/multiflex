@@ -52,7 +52,7 @@ module multiflex_tx #(
   assign tx_empty = fifo_empty_w;
 
   always @(posedge clk) begin
-    if (!rstn) begin
+    if (!rstn || !cfg_enable) begin
       wr_ptr <= 0;
     end else if (tx_wr && !fifo_full_w) begin
       fifo[wr_ptr[FBITS-1:0]] <= tx_byte;
@@ -67,14 +67,26 @@ module multiflex_tx #(
   // data is updated on the fabric posedge that ends the mfx_clk HIGH half
   // (i.e., mfx_clk is about to go LOW), giving the receiver a full low half
   // plus setup time before the next rising sample edge.
+  //
+  // clock only runs when the FIFO has data or the state machine is active;
+  // holds low otherwise so the clock is absent between transmissions
 
   reg [7:0] div_cnt;
   reg       phase; // 0 = high half in progress, 1 = low half in progress
 
-  wire fall_tick = (div_cnt == 0) && (phase == 1'b0) && cfg_enable;
+  wire tx_busy_w = active || !fifo_empty_w;
+
+  // drain: set on the last data fall_tick (last bit of last byte, fifo empty)
+  // keeps the clock alive through one more full cycle so the receiver can
+  // sample the last rising edge with sync=1, then see a clean sync=0 on the
+  // trailing falling edge before the clock gates off
+  reg drain;
+  wire clk_run = tx_busy_w || drain;
+
+  wire fall_tick = (div_cnt == 0) && (phase == 1'b0) && cfg_enable && clk_run;
 
   always @(posedge clk) begin
-    if (!rstn || !cfg_enable) begin
+    if (!rstn || !cfg_enable || !clk_run) begin
       div_cnt <= 0;
       phase   <= 0;
       mfx_clk <= 0;
@@ -115,7 +127,7 @@ module multiflex_tx #(
   reg [3:0] rem;   // 0 = idle/load, 1..8 = bits left in current byte
   reg       active;
 
-  assign tx_busy = active || !fifo_empty_w;
+  assign tx_busy = active || !fifo_empty_w || drain;
 
   wire [7:0] fifo_head = fifo[rd_ptr[FBITS-1:0]];
 
@@ -127,19 +139,21 @@ module multiflex_tx #(
       sr       <= 0;
       rem      <= 0;
       active   <= 0;
+      drain    <= 0;
       mfx_tx   <= 0;
       mfx_sync <= 0;
     end else if (fall_tick) begin
       if (!active) begin
-        // IDLE -> LOAD: pop byte and arm sr; first symbol next fall_tick
+        // drain fall_tick or idle fall_tick: always clear sync/tx
+        // if fifo has data, also load it (back-to-back after a drain burst)
+        mfx_tx   <= 0;
+        mfx_sync <= 0;
+        drain    <= 0;
         if (!fifo_empty_w) begin
           sr     <= fifo_head;
           rem    <= 4'd8;
           active <= 1;
           rd_ptr <= rd_ptr + 1;
-        end else begin
-          mfx_tx   <= 0;
-          mfx_sync <= 0;
         end
       end else begin
         // SEND: drive current symbol from sr
@@ -164,15 +178,24 @@ module multiflex_tx #(
             // active stays 1, mfx_sync stays 1 for this symbol
             // next fall_tick will drive the first symbol of the new byte
           end else begin
-            // no more data; go idle after this symbol
+            // no more data; arm drain so the clock runs one more cycle
+            // -- the receiver samples this symbol's rising edge (sync=1),
+            //    then sees a clean sync=0 falling edge before clock stops
             active <= 0;
             rem    <= 0;
-            // mfx_sync stays 1 for this symbol; will go 0 next fall_tick
+            drain  <= 1;
           end
         end else begin
           sr  <= sr << lanes;
           rem <= rem - lanes[3:0];
         end
+      end
+    end else begin
+      // no fall_tick: clear outputs when truly idle (not during drain)
+      // drain holds sync=1 so the receiver can still sample the last rising edge
+      if (!active && fifo_empty_w && !drain) begin
+        mfx_tx   <= 0;
+        mfx_sync <= 0;
       end
     end
   end
