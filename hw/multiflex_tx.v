@@ -28,17 +28,24 @@ module multiflex_tx #(
   // status
   output wire                  tx_busy,
 
-  // wire outputs
+  // wire outputs (pipeline-registered: driven through a one-cycle output stage
+  // so that all pad-facing flip-flops are the last register before the pad,
+  // eliminating long combinational paths on the TX output)
   output reg                   mfx_clk,
   output reg  [NUM_LANES-1:0]  mfx_tx,
   output reg                   mfx_sync,
 
-  // fabric-side copies: driven by the same flip-flop source as mfx_clk/mfx_sync
-  // but NOT connected to output pads, so synthesis cannot promote them to the
-  // global clock network.  use these for RX edge-detect feedback instead of the
-  // pad-connected mfx_clk/mfx_sync wires.
-  output reg                   mfx_clk_fabric,
-  output reg                   mfx_sync_fabric
+  // fabric-side copies: driven by the pre-pipeline (_r) registers, which are
+  // pure fabric FFs.  NOT connected to output pads so synthesis will not
+  // promote them to the global clock network.  use these for RX loopback and
+  // edge-detect feedback.
+  //
+  // syn_preserve prevents synthesis from merging these with the pad-facing
+  // output FFs (mfx_clk/mfx_sync), which would force the RX module to read
+  // from a FF placed near the pad, causing long routing across the chip.
+  (* syn_preserve = "true" *) output reg                   mfx_clk_fabric,
+  (* syn_preserve = "true" *) output reg  [NUM_LANES-1:0]  mfx_tx_fabric,
+  (* syn_preserve = "true" *) output reg                   mfx_sync_fabric
 );
 
   // -------------------------------------------------------------------------
@@ -95,18 +102,54 @@ module multiflex_tx #(
 
   wire fall_tick = (div_cnt == 0) && (phase == 1'b0) && cfg_enable && clk_run;
 
+  // pre-pipeline internal registers: state machine and divider write these;
+  // also driven out as fabric-side copies so the placer can put them near
+  // the RX module rather than near the output pads
+  reg                  mfx_clk_r;
+  reg [NUM_LANES-1:0]  mfx_tx_r;
+  reg                  mfx_sync_r;
+  reg                  mfx_clk_fabric_r;
+  reg                  mfx_sync_fabric_r;
+
+  // fabric outputs: driven directly from _r registers so the P&R tool can
+  // place them near the RX module.  they are one cycle ahead of the pad-facing
+  // outputs; since RX clock/data/sync all shift by the same one cycle the
+  // relative phase is preserved and the protocol is unaffected.
+  always @(posedge clk) begin
+    if (!rstn || !cfg_enable) begin
+      mfx_clk_fabric  <= 1'b0;
+      mfx_tx_fabric   <= {NUM_LANES{1'b0}};
+      mfx_sync_fabric <= 1'b0;
+    end else begin
+      mfx_clk_fabric  <= mfx_clk_fabric_r;
+      mfx_tx_fabric   <= mfx_tx_r;
+      mfx_sync_fabric <= mfx_sync_fabric_r;
+    end
+  end
+
+  // output pipeline register: pad-facing FFs, no reset.
+  // neither rstn nor cfg_enable are needed here: the pre-pipeline _r registers
+  // are reset by both and will drive 0s into this stage, which propagates to
+  // the pads one cycle later.  removing the reset eliminates the long routing
+  // path from the APB/reset-sync region to these pad-adjacent FFs.
+  always @(posedge clk) begin
+    mfx_clk  <= mfx_clk_r;
+    mfx_tx   <= mfx_tx_r;
+    mfx_sync <= mfx_sync_r;
+  end
+
   always @(posedge clk) begin
     if (!rstn || !cfg_enable || !clk_run) begin
-      div_cnt        <= 0;
-      phase          <= 0;
-      mfx_clk        <= 0;
-      mfx_clk_fabric <= 0;
+      div_cnt          <= 0;
+      phase            <= 0;
+      mfx_clk_r        <= 0;
+      mfx_clk_fabric_r <= 0;
     end else begin
       if (div_cnt == 0) begin
-        div_cnt        <= cfg_clk_div;
-        phase          <= ~phase;
-        mfx_clk        <= phase;
-        mfx_clk_fabric <= phase;
+        div_cnt          <= cfg_clk_div;
+        phase            <= ~phase;
+        mfx_clk_r        <= phase;
+        mfx_clk_fabric_r <= phase;
       end else begin
         div_cnt <= div_cnt - 1;
       end
@@ -145,22 +188,22 @@ module multiflex_tx #(
 
   always @(posedge clk) begin
     if (!rstn || !cfg_enable) begin
-      rd_ptr        <= 0;
-      sr            <= 0;
-      rem           <= 0;
-      active        <= 0;
-      drain         <= 0;
-      mfx_tx        <= 0;
-      mfx_sync      <= 0;
-      mfx_sync_fabric <= 0;
+      rd_ptr           <= 0;
+      sr               <= 0;
+      rem              <= 0;
+      active           <= 0;
+      drain            <= 0;
+      mfx_tx_r         <= 0;
+      mfx_sync_r       <= 0;
+      mfx_sync_fabric_r <= 0;
     end else if (fall_tick) begin
       if (!active) begin
         // drain fall_tick or idle fall_tick: always clear sync/tx
         // if fifo has data, also load it (back-to-back after a drain burst)
-        mfx_tx          <= 0;
-        mfx_sync        <= 0;
-        mfx_sync_fabric <= 0;
-        drain           <= 0;
+        mfx_tx_r          <= 0;
+        mfx_sync_r        <= 0;
+        mfx_sync_fabric_r <= 0;
+        drain             <= 0;
         if (!fifo_empty_w) begin
           sr     <= fifo_head;
           rem    <= 4'd8;
@@ -169,15 +212,15 @@ module multiflex_tx #(
         end
       end else begin
         // SEND: drive current symbol from sr
-        mfx_sync        <= 1;
-        mfx_sync_fabric <= 1;
+        mfx_sync_r        <= 1;
+        mfx_sync_fabric_r <= 1;
         for (k = 0; k < NUM_LANES; k = k + 1) begin
           // lane k gets sr[7-(lanes-1-k)] when that bit position is valid
           // (lanes-1-k) is the offset from the top: 0 for the MSB lane
           if ((k < lanes) && ((lanes - 1 - k) < rem)) begin
-            mfx_tx[k] <= sr[7 - (lanes - 1 - k)];
+            mfx_tx_r[k] <= sr[7 - (lanes - 1 - k)];
           end else begin
-            mfx_tx[k] <= 1'b0;
+            mfx_tx_r[k] <= 1'b0;
           end
         end
 
@@ -188,7 +231,7 @@ module multiflex_tx #(
             sr     <= fifo_head;
             rem    <= 4'd8;
             rd_ptr <= rd_ptr + 1;
-            // active stays 1, mfx_sync stays 1 for this symbol
+            // active stays 1, mfx_sync_r stays 1 for this symbol
             // next fall_tick will drive the first symbol of the new byte
           end else begin
             // no more data; arm drain so the clock runs one more cycle
@@ -205,11 +248,11 @@ module multiflex_tx #(
       end
     end else begin
       // no fall_tick: clear outputs when truly idle (not during drain)
-      // drain holds sync=1 so the receiver can still sample the last rising edge
+      // drain holds sync_r=1 so the receiver can still sample the last rising edge
       if (!active && fifo_empty_w && !drain) begin
-        mfx_tx          <= 0;
-        mfx_sync        <= 0;
-        mfx_sync_fabric <= 0;
+        mfx_tx_r          <= 0;
+        mfx_sync_r        <= 0;
+        mfx_sync_fabric_r <= 0;
       end
     end
   end

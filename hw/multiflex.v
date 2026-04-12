@@ -506,8 +506,9 @@ module multiflex #(
   // --------------------------------------------------------------------------
   // clk domain: multiflex_tx instantiation
   // --------------------------------------------------------------------------
-  wire mfx_clk_fabric;
-  wire mfx_sync_fabric;
+  wire                  mfx_clk_fabric;
+  wire [NUM_LANES-1:0]  mfx_tx_fabric;
+  wire                  mfx_sync_fabric;
 
   multiflex_tx #(.NUM_LANES(NUM_LANES)) tx (
     .clk            (clk),
@@ -524,6 +525,7 @@ module multiflex #(
     .mfx_tx         (mfx_tx),
     .mfx_sync       (mfx_sync),
     .mfx_clk_fabric (mfx_clk_fabric),
+    .mfx_tx_fabric  (mfx_tx_fabric),
     .mfx_sync_fabric(mfx_sync_fabric)
   );
 
@@ -536,7 +538,9 @@ module multiflex #(
   // network.  using these avoids the edge-detect breakage that occurs when
   // mfx_clk (output pad, name contains "clk") is promoted to a clock-only net.
   // --------------------------------------------------------------------------
-  wire [NUM_LANES-1:0] rx_data_in = cfg_loopback_c ? mfx_tx : mfx_rx;
+  // loopback uses the fabric copy of mfx_tx (not the pad-facing FF) so the
+  // placer keeps this path in the fabric, away from the output pad region
+  wire [NUM_LANES-1:0] rx_data_in = cfg_loopback_c ? mfx_tx_fabric : mfx_rx;
 
   multiflex_rx #(.NUM_LANES(NUM_LANES)) rx (
     .clk         (clk),
