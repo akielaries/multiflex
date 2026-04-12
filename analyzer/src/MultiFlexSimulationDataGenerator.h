@@ -23,14 +23,10 @@ protected:
   U32 mSamplesPerHalfClock;
 
   SimulationChannelDescriptorGroup mSimChannels;
-  SimulationChannelDescriptor* mClkSim;
-  SimulationChannelDescriptor* mSyncSim;
-  SimulationChannelDescriptor* mTx2Sim;
-  SimulationChannelDescriptor* mTx1Sim;
-  SimulationChannelDescriptor* mTx0Sim;
-  SimulationChannelDescriptor* mRx2Sim;
-  SimulationChannelDescriptor* mRx1Sim;
-  SimulationChannelDescriptor* mRx0Sim;
+  SimulationChannelDescriptor* mClkASim;
+  SimulationChannelDescriptor* mSyncASim;
+  SimulationChannelDescriptor* mTxA0Sim;
+  SimulationChannelDescriptor* mTxA1Sim;
 };
 
 #endif // MULTIFLEX_SIMULATION_DATA_GENERATOR

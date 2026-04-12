@@ -1,20 +1,22 @@
 #ifndef __CHEBY__MULTIFLEX_REGS__H__
 #define __CHEBY__MULTIFLEX_REGS__H__
 
-#define MULTIFLEX_REGS_SIZE 24 /* 0x18 */
+#define MULTIFLEX_REGS_SIZE 24576 /* 0x6000 = 24KB */
 
 /* REG ctrl */
 #define MULTIFLEX_REGS_CTRL 0x0UL
 #define MULTIFLEX_REGS_CTRL_ENABLE 0x1UL
 #define MULTIFLEX_REGS_CTRL_ENABLE_MASK 0x1UL
 #define MULTIFLEX_REGS_CTRL_ENABLE_SHIFT 0
-#define MULTIFLEX_REGS_CTRL_LANES_MASK 0x3eUL
-#define MULTIFLEX_REGS_CTRL_LANES_SHIFT 1
-#define MULTIFLEX_REGS_CTRL_CLK_DIV_MASK 0x3fc0UL
-#define MULTIFLEX_REGS_CTRL_CLK_DIV_SHIFT 6
-#define MULTIFLEX_REGS_CTRL_LOOPBACK 0x4000UL
-#define MULTIFLEX_REGS_CTRL_LOOPBACK_MASK 0x4000UL
-#define MULTIFLEX_REGS_CTRL_LOOPBACK_SHIFT 14
+#define MULTIFLEX_REGS_CTRL_LANES_TX_MASK 0x3eUL
+#define MULTIFLEX_REGS_CTRL_LANES_TX_SHIFT 1
+#define MULTIFLEX_REGS_CTRL_LANES_RX_MASK 0x7c0UL
+#define MULTIFLEX_REGS_CTRL_LANES_RX_SHIFT 6
+#define MULTIFLEX_REGS_CTRL_CLK_DIV_MASK 0x7f800UL
+#define MULTIFLEX_REGS_CTRL_CLK_DIV_SHIFT 11
+#define MULTIFLEX_REGS_CTRL_LOOPBACK 0x80000UL
+#define MULTIFLEX_REGS_CTRL_LOOPBACK_MASK 0x80000UL
+#define MULTIFLEX_REGS_CTRL_LOOPBACK_SHIFT 19
 
 /* REG status */
 #define MULTIFLEX_REGS_STATUS 0x4UL
@@ -42,9 +44,6 @@
 #define MULTIFLEX_REGS_STATUS_RX_FRAMING_ERR 0x800UL
 #define MULTIFLEX_REGS_STATUS_RX_FRAMING_ERR_MASK 0x800UL
 #define MULTIFLEX_REGS_STATUS_RX_FRAMING_ERR_SHIFT 11
-#define MULTIFLEX_REGS_STATUS_RX_OVERFLOW 0x1000UL
-#define MULTIFLEX_REGS_STATUS_RX_OVERFLOW_MASK 0x1000UL
-#define MULTIFLEX_REGS_STATUS_RX_OVERFLOW_SHIFT 12
 
 /* REG tx_data */
 #define MULTIFLEX_REGS_TX_DATA 0x8UL
@@ -75,6 +74,30 @@
 #define MULTIFLEX_REGS_ERROR_CLR_CLR_RX_MASK 0x2UL
 #define MULTIFLEX_REGS_ERROR_CLR_CLR_RX_SHIFT 1
 
+/* REG tx_len */
+#define MULTIFLEX_REGS_TX_LEN 0x18UL
+#define MULTIFLEX_REGS_TX_LEN_LEN_MASK 0x7ffUL
+#define MULTIFLEX_REGS_TX_LEN_LEN_SHIFT 0
+
+/* REG rx_count */
+#define MULTIFLEX_REGS_RX_COUNT 0x1cUL
+#define MULTIFLEX_REGS_RX_COUNT_COUNT_MASK 0x7ffUL
+#define MULTIFLEX_REGS_RX_COUNT_COUNT_SHIFT 0
+
+/* REG tx_buf */
+#define MULTIFLEX_REGS_TX_BUF 0x2000UL
+#define MULTIFLEX_REGS_TX_BUF_SIZE 1 /* 0x1 */
+
+/* REG data */
+#define MULTIFLEX_REGS_TX_BUF_DATA 0x0UL
+
+/* REG rx_buf */
+#define MULTIFLEX_REGS_RX_BUF 0x4000UL
+#define MULTIFLEX_REGS_RX_BUF_SIZE 1 /* 0x1 */
+
+/* REG data */
+#define MULTIFLEX_REGS_RX_BUF_DATA 0x0UL
+
 #ifndef __ASSEMBLER__
 struct multiflex_regs {
   /* [0x0]: REG (rw) */
@@ -94,6 +117,33 @@ struct multiflex_regs {
 
   /* [0x14]: REG (rw) */
   uint32_t error_clr;
+
+  /* [0x18]: REG (rw) */
+  uint32_t tx_len;
+
+  /* [0x1c]: REG (ro) */
+  uint32_t rx_count;
+
+  /* padding to: 8192 Bytes */
+  uint32_t __padding_0[2040];
+
+  /* [0x2000]: MEMORY */
+  struct tx_buf {
+    /* [0x0]: REG (wo) */
+    uint8_t data;
+  } tx_buf[2048];
+
+  /* padding to: 8192 Bytes */
+  uint32_t __padding_1[1536];
+
+  /* [0x4000]: MEMORY */
+  struct rx_buf {
+    /* [0x0]: REG (ro) */
+    uint8_t data;
+  } rx_buf[2048];
+
+  /* padding to: 16384 Bytes */
+  uint32_t __padding_2[1536];
 };
 #endif /* !__ASSEMBLER__*/
 

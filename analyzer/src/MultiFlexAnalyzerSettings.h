@@ -15,24 +15,27 @@ public:
   virtual void LoadSettings(const char* settings);
   virtual const char* SaveSettings();
 
-  Channel mClkChannel;
-  Channel mSyncChannel;
-  Channel mTx2Channel;
-  Channel mTx1Channel;
-  Channel mTx0Channel;
-  Channel mRx2Channel;
-  Channel mRx1Channel;
-  Channel mRx0Channel;
+  // side A (transmitting from FPGA): CLK_A, SYNC_A, TX_A[0], TX_A[1]
+  Channel mClkAChannel;
+  Channel mSyncAChannel;   // optional
+  Channel mTxA0Channel;
+  Channel mTxA1Channel;    // optional
+
+  // side B (transmitting from remote): CLK_B, SYNC_B, TX_B[0], TX_B[1]
+  Channel mClkBChannel;    // optional; enables B-direction decode
+  Channel mSyncBChannel;   // optional
+  Channel mTxB0Channel;    // optional
+  Channel mTxB1Channel;    // optional
 
 protected:
-  AnalyzerSettingInterfaceChannel mClkInterface;
-  AnalyzerSettingInterfaceChannel mSyncInterface;
-  AnalyzerSettingInterfaceChannel mTx2Interface;
-  AnalyzerSettingInterfaceChannel mTx1Interface;
-  AnalyzerSettingInterfaceChannel mTx0Interface;
-  AnalyzerSettingInterfaceChannel mRx2Interface;
-  AnalyzerSettingInterfaceChannel mRx1Interface;
-  AnalyzerSettingInterfaceChannel mRx0Interface;
+  AnalyzerSettingInterfaceChannel mClkAInterface;
+  AnalyzerSettingInterfaceChannel mSyncAInterface;
+  AnalyzerSettingInterfaceChannel mTxA0Interface;
+  AnalyzerSettingInterfaceChannel mTxA1Interface;
+  AnalyzerSettingInterfaceChannel mClkBInterface;
+  AnalyzerSettingInterfaceChannel mSyncBInterface;
+  AnalyzerSettingInterfaceChannel mTxB0Interface;
+  AnalyzerSettingInterfaceChannel mTxB1Interface;
 };
 
 #endif // MULTIFLEX_ANALYZER_SETTINGS

@@ -26,14 +26,15 @@ protected:
   MultiFlexAnalyzerSettings mSettings;
   std::unique_ptr<MultiFlexAnalyzerResults> mResults;
 
-  AnalyzerChannelData* mClk;
-  AnalyzerChannelData* mSync;
-  AnalyzerChannelData* mTx2;
-  AnalyzerChannelData* mTx1;
-  AnalyzerChannelData* mTx0;
-  AnalyzerChannelData* mRx2;
-  AnalyzerChannelData* mRx1;
-  AnalyzerChannelData* mRx0;
+  AnalyzerChannelData* mClkA;
+  AnalyzerChannelData* mSyncA;
+  AnalyzerChannelData* mTxA0;
+  AnalyzerChannelData* mTxA1;
+
+  AnalyzerChannelData* mClkB;
+  AnalyzerChannelData* mSyncB;
+  AnalyzerChannelData* mTxB0;
+  AnalyzerChannelData* mTxB1;
 
   MultiFlexSimulationDataGenerator mSimulationDataGenerator;
   bool mSimulationInitilized;

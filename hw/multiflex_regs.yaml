@@ -11,24 +11,28 @@ memory-map:
         children:
           - field:
               name: enable
-              description: enable transmitter and wire clock
+              description: enable TX engine and wire clock
               range: 0
           - field:
-              name: lanes
-              description: number of active lanes (1-31, must not exceed NUM_LANES parameter)
+              name: lanes_tx
+              description: number of active TX lanes (1-31, must not exceed NUM_LANES_TX parameter)
               range: 5-1
+          - field:
+              name: lanes_rx
+              description: number of active RX lanes (1-31, must not exceed NUM_LANES_RX parameter)
+              range: 10-6
           - field:
               name: clk_div
               description: wire clock half-period in fabric cycles minus 1 (4 = 10 MHz at 100 MHz fabric)
-              range: 13-6
+              range: 18-11
           - field:
               name: loopback
               description: internal loopback -- ties TX output back to RX input for self-test
-              range: 14
+              range: 19
 
     - reg:
         name: status
-        description: link status -- TX live bits update every cycle; TX/RX error bits are sticky, cleared via error_clr
+        description: link status -- TX live bits update every cycle; sticky bits cleared via error_clr
         width: 32
         access: ro
         children:
@@ -50,7 +54,7 @@ memory-map:
               range: 3
           - field:
               name: rx_locked
-              description: reserved -- RX has seen N consecutive valid frames
+              description: RX has seen at least one valid sync pulse
               range: 8
           - field:
               name: rx_clk_timeout
@@ -58,16 +62,12 @@ memory-map:
               range: 9
           - field:
               name: rx_sync_lost
-              description: reserved -- mfx_sync dropped unexpectedly mid-burst
+              description: sticky -- mfx_sync dropped unexpectedly mid-byte
               range: 10
           - field:
               name: rx_framing_err
               description: reserved -- symbol count did not align to byte boundary
               range: 11
-          - field:
-              name: rx_overflow
-              description: reserved -- RX FIFO full, byte dropped
-              range: 12
 
     - reg:
         name: tx_data
@@ -82,17 +82,17 @@ memory-map:
 
     - reg:
         name: rx_data
-        description: reserved -- RX FIFO pop (read returns oldest received byte; valid=0 if FIFO empty)
+        description: RX FIFO pop -- read returns oldest received byte; check rx_locked before reading
         width: 32
         access: ro
         children:
           - field:
               name: data
-              description: reserved -- received byte
+              description: received byte
               range: 7-0
           - field:
               name: valid
-              description: reserved -- 1 if data field contains a valid byte
+              description: 1 if data field contains a valid byte
               range: 8
 
     - reg:
@@ -107,7 +107,7 @@ memory-map:
               range: 7-0
           - field:
               name: rx_error_count
-              description: reserved -- number of RX framing or sync errors (saturates at 255)
+              description: number of RX pattern checker errors (saturates at 255)
               range: 15-8
 
     - reg:
@@ -122,5 +122,47 @@ memory-map:
               range: 0
           - field:
               name: clr_rx
-              description: reserved -- clears all RX error bits and rx_error_count counter
+              description: clears all RX error bits and rx_error_count counter
               range: 1
+
+    - reg:
+        name: tx_len
+        description: number of bytes to transmit from tx_buf; writing a non-zero value triggers TX (ignored if tx_busy)
+        width: 32
+        access: rw
+        children:
+          - field:
+              name: len
+              description: byte count (0-2047)
+              range: 10-0
+
+    - reg:
+        name: rx_count
+        description: number of bytes currently in rx_buf available to read
+        width: 32
+        access: ro
+        children:
+          - field:
+              name: count
+              description: number of valid bytes in rx_buf (0-2047)
+              range: 10-0
+
+    - memory:
+        name: tx_buf
+        description: TX buffer -- firmware fills this then writes tx_len to trigger transmission
+        memsize: 2048
+        children:
+          - reg:
+              name: data
+              access: wo
+              width: 8
+
+    - memory:
+        name: rx_buf
+        description: RX buffer -- hardware fills as bytes arrive; firmware reads rx_count then reads here
+        memsize: 2048
+        children:
+          - reg:
+              name: data
+              access: ro
+              width: 8

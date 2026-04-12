@@ -6,14 +6,10 @@ MultiFlexSimulationDataGenerator::MultiFlexSimulationDataGenerator()
   : mSettings(nullptr),
     mSimulationSampleRateHz(0),
     mSamplesPerHalfClock(0),
-    mClkSim(nullptr),
-    mSyncSim(nullptr),
-    mTx2Sim(nullptr),
-    mTx1Sim(nullptr),
-    mTx0Sim(nullptr),
-    mRx2Sim(nullptr),
-    mRx1Sim(nullptr),
-    mRx0Sim(nullptr)
+    mClkASim(nullptr),
+    mSyncASim(nullptr),
+    mTxA0Sim(nullptr),
+    mTxA1Sim(nullptr)
 {
 }
 
@@ -32,14 +28,10 @@ void MultiFlexSimulationDataGenerator::Initialize(U32 simulation_sample_rate, Mu
     mSamplesPerHalfClock = 1;
   }
 
-  mClkSim  = mSimChannels.Add(mSettings->mClkChannel, simulation_sample_rate, BIT_LOW);
-  mTx0Sim  = mSimChannels.Add(mSettings->mTx0Channel, simulation_sample_rate, BIT_LOW);
-  mSyncSim = (mSettings->mSyncChannel != UNDEFINED_CHANNEL) ? mSimChannels.Add(mSettings->mSyncChannel, simulation_sample_rate, BIT_LOW) : nullptr;
-  mTx1Sim  = (mSettings->mTx1Channel  != UNDEFINED_CHANNEL) ? mSimChannels.Add(mSettings->mTx1Channel,  simulation_sample_rate, BIT_LOW) : nullptr;
-  mTx2Sim  = (mSettings->mTx2Channel  != UNDEFINED_CHANNEL) ? mSimChannels.Add(mSettings->mTx2Channel,  simulation_sample_rate, BIT_LOW) : nullptr;
-  mRx0Sim  = (mSettings->mRx0Channel  != UNDEFINED_CHANNEL) ? mSimChannels.Add(mSettings->mRx0Channel,  simulation_sample_rate, BIT_LOW) : nullptr;
-  mRx1Sim  = (mSettings->mRx1Channel  != UNDEFINED_CHANNEL) ? mSimChannels.Add(mSettings->mRx1Channel,  simulation_sample_rate, BIT_LOW) : nullptr;
-  mRx2Sim  = (mSettings->mRx2Channel  != UNDEFINED_CHANNEL) ? mSimChannels.Add(mSettings->mRx2Channel,  simulation_sample_rate, BIT_LOW) : nullptr;
+  mClkASim  = mSimChannels.Add(mSettings->mClkAChannel,  simulation_sample_rate, BIT_LOW);
+  mTxA0Sim  = mSimChannels.Add(mSettings->mTxA0Channel,  simulation_sample_rate, BIT_LOW);
+  mSyncASim = (mSettings->mSyncAChannel != UNDEFINED_CHANNEL) ? mSimChannels.Add(mSettings->mSyncAChannel, simulation_sample_rate, BIT_LOW) : nullptr;
+  mTxA1Sim  = (mSettings->mTxA1Channel  != UNDEFINED_CHANNEL) ? mSimChannels.Add(mSettings->mTxA1Channel,  simulation_sample_rate, BIT_LOW) : nullptr;
 }
 
 U32 MultiFlexSimulationDataGenerator::GenerateSimulationData(U64 largest_sample_requested, U32 sample_rate, SimulationChannelDescriptor** simulation_channels)
@@ -48,7 +40,7 @@ U32 MultiFlexSimulationDataGenerator::GenerateSimulationData(U64 largest_sample_
 
   static const U8 tx_bytes[] = { 0xDE, 0xAD, 0xBE, 0xEF };
 
-  while (mClkSim->GetCurrentSampleNumber() < adjusted) {
+  while (mClkASim->GetCurrentSampleNumber() < adjusted) {
     AdvanceAll(mSamplesPerHalfClock * 20);
     CreateTransaction(tx_bytes, 4);
   }
@@ -60,19 +52,17 @@ U32 MultiFlexSimulationDataGenerator::GenerateSimulationData(U64 largest_sample_
 void MultiFlexSimulationDataGenerator::CreateTransaction(const U8* bytes, U32 num_bytes)
 {
   int num_lanes = 1;
-  if (mTx1Sim != nullptr) num_lanes++;
-  if (mTx2Sim != nullptr) num_lanes++;
+  if (mTxA1Sim != nullptr) num_lanes++;
 
-  // LOAD: one rising edge with SYNC=0 so the decoder resets its accumulator
-  if (mSyncSim != nullptr) { mSyncSim->TransitionIfNeeded(BIT_LOW); }
-  if (mTx2Sim  != nullptr) { mTx2Sim->TransitionIfNeeded(BIT_LOW); }
-  if (mTx1Sim  != nullptr) { mTx1Sim->TransitionIfNeeded(BIT_LOW); }
-  mTx0Sim->TransitionIfNeeded(BIT_LOW);
+  // one rising edge with SYNC=0 so the decoder resets its accumulator
+  if (mSyncASim != nullptr) { mSyncASim->TransitionIfNeeded(BIT_LOW); }
+  if (mTxA1Sim  != nullptr) { mTxA1Sim->TransitionIfNeeded(BIT_LOW); }
+  mTxA0Sim->TransitionIfNeeded(BIT_LOW);
 
   AdvanceAll(mSamplesPerHalfClock);
-  mClkSim->TransitionIfNeeded(BIT_HIGH); // LOAD rising -- SYNC=0, decoder resets
+  mClkASim->TransitionIfNeeded(BIT_HIGH); // SYNC=0 rising -- decoder resets
   AdvanceAll(mSamplesPerHalfClock);
-  mClkSim->TransitionIfNeeded(BIT_LOW);  // falling before first data symbol
+  mClkASim->TransitionIfNeeded(BIT_LOW);
 
   // data: drive each symbol MSB-first across active lanes, SYNC=1
   for (U32 i = 0; i < num_bytes; i++) {
@@ -81,43 +71,36 @@ void MultiFlexSimulationDataGenerator::CreateTransaction(const U8* bytes, U32 nu
       int bits_remaining = 8 - bits_sent;
       int bits_this_sym = (bits_remaining < num_lanes) ? bits_remaining : num_lanes;
 
-      if (mSyncSim != nullptr) { mSyncSim->TransitionIfNeeded(BIT_HIGH); }
+      if (mSyncASim != nullptr) { mSyncASim->TransitionIfNeeded(BIT_HIGH); }
       for (int lane = 0; lane < num_lanes; lane++) {
-        // lane (num_lanes-1) carries MSB of symbol; lower lanes carry less significant bits
         int offset = num_lanes - 1 - lane;
         BitState b = BIT_LOW;
         if (offset < bits_this_sym) {
           b = ((bytes[i] >> (7 - bits_sent - offset)) & 1) ? BIT_HIGH : BIT_LOW;
         }
-        if      (lane == 0)                    { mTx0Sim->TransitionIfNeeded(b); }
-        else if (lane == 1 && mTx1Sim != nullptr) { mTx1Sim->TransitionIfNeeded(b); }
-        else if (lane == 2 && mTx2Sim != nullptr) { mTx2Sim->TransitionIfNeeded(b); }
+        if      (lane == 0)                     { mTxA0Sim->TransitionIfNeeded(b); }
+        else if (lane == 1 && mTxA1Sim != nullptr) { mTxA1Sim->TransitionIfNeeded(b); }
       }
 
       AdvanceAll(mSamplesPerHalfClock);
-      mClkSim->TransitionIfNeeded(BIT_HIGH); // data rising -- decoder samples here
+      mClkASim->TransitionIfNeeded(BIT_HIGH); // decoder samples here
       AdvanceAll(mSamplesPerHalfClock);
-      mClkSim->TransitionIfNeeded(BIT_LOW);  // falling (used as frame end for last bit)
+      mClkASim->TransitionIfNeeded(BIT_LOW);
 
       bits_sent += bits_this_sym;
     }
   }
 
-  // end of burst: deassert SYNC and TX
-  if (mSyncSim != nullptr) { mSyncSim->TransitionIfNeeded(BIT_LOW); }
-  if (mTx2Sim  != nullptr) { mTx2Sim->TransitionIfNeeded(BIT_LOW); }
-  if (mTx1Sim  != nullptr) { mTx1Sim->TransitionIfNeeded(BIT_LOW); }
-  mTx0Sim->TransitionIfNeeded(BIT_LOW);
+  // end of burst: deassert SYNC and TX lanes
+  if (mSyncASim != nullptr) { mSyncASim->TransitionIfNeeded(BIT_LOW); }
+  if (mTxA1Sim  != nullptr) { mTxA1Sim->TransitionIfNeeded(BIT_LOW); }
+  mTxA0Sim->TransitionIfNeeded(BIT_LOW);
 }
 
 void MultiFlexSimulationDataGenerator::AdvanceAll(U32 samples)
 {
-  mClkSim->Advance(samples);
-  mTx0Sim->Advance(samples);
-  if (mSyncSim != nullptr) { mSyncSim->Advance(samples); }
-  if (mTx1Sim  != nullptr) { mTx1Sim->Advance(samples); }
-  if (mTx2Sim  != nullptr) { mTx2Sim->Advance(samples); }
-  if (mRx0Sim  != nullptr) { mRx0Sim->Advance(samples); }
-  if (mRx1Sim  != nullptr) { mRx1Sim->Advance(samples); }
-  if (mRx2Sim  != nullptr) { mRx2Sim->Advance(samples); }
+  mClkASim->Advance(samples);
+  mTxA0Sim->Advance(samples);
+  if (mSyncASim != nullptr) { mSyncASim->Advance(samples); }
+  if (mTxA1Sim  != nullptr) { mTxA1Sim->Advance(samples); }
 }

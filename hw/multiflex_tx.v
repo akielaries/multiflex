@@ -31,7 +31,14 @@ module multiflex_tx #(
   // wire outputs
   output reg                   mfx_clk,
   output reg  [NUM_LANES-1:0]  mfx_tx,
-  output reg                   mfx_sync
+  output reg                   mfx_sync,
+
+  // fabric-side copies: driven by the same flip-flop source as mfx_clk/mfx_sync
+  // but NOT connected to output pads, so synthesis cannot promote them to the
+  // global clock network.  use these for RX edge-detect feedback instead of the
+  // pad-connected mfx_clk/mfx_sync wires.
+  output reg                   mfx_clk_fabric,
+  output reg                   mfx_sync_fabric
 );
 
   // -------------------------------------------------------------------------
@@ -74,28 +81,32 @@ module multiflex_tx #(
   reg [7:0] div_cnt;
   reg       phase; // 0 = high half in progress, 1 = low half in progress
 
+  // forward declarations needed before wire assignments that reference them
+  reg       active;
+  reg       drain;
+
   wire tx_busy_w = active || !fifo_empty_w;
 
   // drain: set on the last data fall_tick (last bit of last byte, fifo empty)
   // keeps the clock alive through one more full cycle so the receiver can
   // sample the last rising edge with sync=1, then see a clean sync=0 on the
   // trailing falling edge before the clock gates off
-  reg drain;
   wire clk_run = tx_busy_w || drain;
 
   wire fall_tick = (div_cnt == 0) && (phase == 1'b0) && cfg_enable && clk_run;
 
   always @(posedge clk) begin
     if (!rstn || !cfg_enable || !clk_run) begin
-      div_cnt <= 0;
-      phase   <= 0;
-      mfx_clk <= 0;
+      div_cnt        <= 0;
+      phase          <= 0;
+      mfx_clk        <= 0;
+      mfx_clk_fabric <= 0;
     end else begin
       if (div_cnt == 0) begin
-        div_cnt <= cfg_clk_div;
-        phase   <= ~phase;
-        mfx_clk <= phase; // end of low half (phase was 1) -> clk goes high
-                          // end of high half (phase was 0) -> clk goes low
+        div_cnt        <= cfg_clk_div;
+        phase          <= ~phase;
+        mfx_clk        <= phase;
+        mfx_clk_fabric <= phase;
       end else begin
         div_cnt <= div_cnt - 1;
       end
@@ -125,7 +136,6 @@ module multiflex_tx #(
 
   reg [7:0] sr;
   reg [3:0] rem;   // 0 = idle/load, 1..8 = bits left in current byte
-  reg       active;
 
   assign tx_busy = active || !fifo_empty_w || drain;
 
@@ -135,20 +145,22 @@ module multiflex_tx #(
 
   always @(posedge clk) begin
     if (!rstn || !cfg_enable) begin
-      rd_ptr   <= 0;
-      sr       <= 0;
-      rem      <= 0;
-      active   <= 0;
-      drain    <= 0;
-      mfx_tx   <= 0;
-      mfx_sync <= 0;
+      rd_ptr        <= 0;
+      sr            <= 0;
+      rem           <= 0;
+      active        <= 0;
+      drain         <= 0;
+      mfx_tx        <= 0;
+      mfx_sync      <= 0;
+      mfx_sync_fabric <= 0;
     end else if (fall_tick) begin
       if (!active) begin
         // drain fall_tick or idle fall_tick: always clear sync/tx
         // if fifo has data, also load it (back-to-back after a drain burst)
-        mfx_tx   <= 0;
-        mfx_sync <= 0;
-        drain    <= 0;
+        mfx_tx          <= 0;
+        mfx_sync        <= 0;
+        mfx_sync_fabric <= 0;
+        drain           <= 0;
         if (!fifo_empty_w) begin
           sr     <= fifo_head;
           rem    <= 4'd8;
@@ -157,7 +169,8 @@ module multiflex_tx #(
         end
       end else begin
         // SEND: drive current symbol from sr
-        mfx_sync <= 1;
+        mfx_sync        <= 1;
+        mfx_sync_fabric <= 1;
         for (k = 0; k < NUM_LANES; k = k + 1) begin
           // lane k gets sr[7-(lanes-1-k)] when that bit position is valid
           // (lanes-1-k) is the offset from the top: 0 for the MSB lane
@@ -194,8 +207,9 @@ module multiflex_tx #(
       // no fall_tick: clear outputs when truly idle (not during drain)
       // drain holds sync=1 so the receiver can still sample the last rising edge
       if (!active && fifo_empty_w && !drain) begin
-        mfx_tx   <= 0;
-        mfx_sync <= 0;
+        mfx_tx          <= 0;
+        mfx_sync        <= 0;
+        mfx_sync_fabric <= 0;
       end
     end
   end
