@@ -1,12 +1,12 @@
 <testsuites name="results">
   <testsuite name="all" package="all">
-    <property name="random_seed" value="1775975894" />
-    <testcase name="test_txbuf_readback" classname="test_multiflex" file="/home/akiel/trunk/pub/multiflex/hw/tb/test_multiflex.py" lineno="130" time="0.04706978797912598" sim_time_ns="6620.0" ratio_time="140642.23112574394" />
-    <testcase name="test_streaming_loopback" classname="test_multiflex" file="/home/akiel/trunk/pub/multiflex/hw/tb/test_multiflex.py" lineno="154" time="0.08477163314819336" sim_time_ns="12900.0" ratio_time="152173.54580687257" />
-    <testcase name="test_drain_loopback" classname="test_multiflex" file="/home/akiel/trunk/pub/multiflex/hw/tb/test_multiflex.py" lineno="206" time="0.20994997024536133" sim_time_ns="31440.0" ratio_time="149749.96168495357" />
-    <testcase name="test_drain_loopback_3lane" classname="test_multiflex" file="/home/akiel/trunk/pub/multiflex/hw/tb/test_multiflex.py" lineno="277" time="0.10743379592895508" sim_time_ns="14880.0" ratio_time="138503.90253212312" />
-    <testcase name="test_error_clr" classname="test_multiflex" file="/home/akiel/trunk/pub/multiflex/hw/tb/test_multiflex.py" lineno="324" time="0.023636817932128906" sim_time_ns="3620.0" ratio_time="153150.9025620335" />
-    <testcase name="test_drain_loopback_clkdiv31" classname="test_multiflex" file="/home/akiel/trunk/pub/multiflex/hw/tb/test_multiflex.py" lineno="359" time="0.5151851177215576" sim_time_ns="84840.0" ratio_time="164678.670019062" />
-    <testcase name="test_drain_loopback_physpath" classname="test_multiflex" file="/home/akiel/trunk/pub/multiflex/hw/tb/test_multiflex.py" lineno="402" time="0.5212934017181396" sim_time_ns="84840.0" ratio_time="162749.0386802795" />
+    <property name="random_seed" value="1776040268" />
+    <testcase name="test_txbuf_readback" classname="test_multiflex" file="/home/akiel/trunk/pub/multiflex/hw/tb/test_multiflex.py" lineno="130" time="0.06170821189880371" sim_time_ns="6620.0" ratio_time="107279.07674356607" />
+    <testcase name="test_streaming_loopback" classname="test_multiflex" file="/home/akiel/trunk/pub/multiflex/hw/tb/test_multiflex.py" lineno="154" time="0.10637140274047852" sim_time_ns="12900.0" ratio_time="121273.19625062199" />
+    <testcase name="test_drain_loopback" classname="test_multiflex" file="/home/akiel/trunk/pub/multiflex/hw/tb/test_multiflex.py" lineno="206" time="0.2102978229522705" sim_time_ns="31440.0" ratio_time="149502.26092989877" />
+    <testcase name="test_drain_loopback_3lane" classname="test_multiflex" file="/home/akiel/trunk/pub/multiflex/hw/tb/test_multiflex.py" lineno="277" time="0.10500335693359375" sim_time_ns="14880.0" ratio_time="141709.75514059435" />
+    <testcase name="test_error_clr" classname="test_multiflex" file="/home/akiel/trunk/pub/multiflex/hw/tb/test_multiflex.py" lineno="324" time="0.026770591735839844" sim_time_ns="3620.0" ratio_time="135223.01022407468" />
+    <testcase name="test_drain_loopback_clkdiv31" classname="test_multiflex" file="/home/akiel/trunk/pub/multiflex/hw/tb/test_multiflex.py" lineno="359" time="0.5272936820983887" sim_time_ns="84840.0" ratio_time="160897.05391950734" />
+    <testcase name="test_drain_loopback_physpath" classname="test_multiflex" file="/home/akiel/trunk/pub/multiflex/hw/tb/test_multiflex.py" lineno="402" time="0.5330207347869873" sim_time_ns="84840.0" ratio_time="159168.2920813669" />
   </testsuite>
 </testsuites>
